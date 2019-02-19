@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 '''
   _\
@@ -22,39 +22,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 '''
 import io
 import sys
-sys.path.insert(1, '/usr/lib/python2.7/dist-packages/picamera')
 import picamera
 import numpy as np
 import cv2
 import threading
 import math
 import time
-import pigpio
-
-GPIOS = 32
-MODES = ["INPUT", "OUTPUT", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"]
-
-pi = pigpio.pi()
-
-#pin for Powerswitch (Lumos,Nox)
-switch_pin = 16
-pi.set_mode(switch_pin,pigpio.OUTPUT)
-
-#pin for Trinket (Colovario)
-trinket_pin = 12
-pi.set_mode(trinket_pin,pigpio.OUTPUT)
-
-# Parameters for image processing
-lk_params = dict( winSize  = (15,15),
-                maxLevel = 2,
-                criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-dilation_params = (5, 5)
-movment_threshold = 80
-
-Scan()
+import os
 
 # Scan starts camera input and runs FindNewPoints
 def Scan():
+    global cam
     cv2.namedWindow("Raspberry Potter")
     stream = io.BytesIO()
     cam = picamera.PiCamera()
@@ -65,11 +43,12 @@ def Scan():
             FindNewPoints()
     except KeyboardInterrupt:
         End()
-        exit
+        exit()
 
 #FindWand is called to find all potential wands in a scene.  These are then tracked as points for movement.  The scene is reset every 3 seconds.
 def FindNewPoints():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame
+    global old_frame,old_gray,p0,mask,color,ig,img,frame,cam
+    stream = io.BytesIO()
     try:
         try:
             old_frame = cam.capture(stream, format='jpeg')
@@ -80,7 +59,7 @@ def FindNewPoints():
         cv2.flip(old_frame,1,old_frame)
         old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
         #cv2.equalizeHist(old_gray,old_gray)
-	    #old_gray = cv2.GaussianBlur(old_gray,(9,9),1.5)
+        #old_gray = cv2.GaussianBlur(old_gray,(9,9),1.5)
         #dilate_kernel = np.ones(dilation_params, np.uint8)
         #old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
 
@@ -92,17 +71,21 @@ def FindNewPoints():
         ig = [[0] for x in range(20)]
         print("finding...")
         TrackWand()
-	    #This resets the scene every three seconds
+        #This resets the scene every three seconds
         threading.Timer(3, FindNewPoints).start()
+    except KeyboardInterrupt:
+        End()
+        exit()
     except:
         e = sys.exc_info()[1]
         print("FindWand Error: %s" % e )
         End()
-        exit
+        exit()
 
 def TrackWand():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame
+    global old_frame,old_gray,p0,mask,color,ig,img,frame,cam
     color = (0,0,255)
+    stream = io.BytesIO()
     try:
         old_frame = cam.capture(stream, format='jpeg')
     except:
@@ -122,7 +105,7 @@ def TrackWand():
         p0 = p0[:,:,0:2]
     except:
         print("No points found")
-	# Create a mask image for drawing purposes
+    # Create a mask image for drawing purposes
     mask = np.zeros_like(old_frame)
 
     while True:
@@ -153,10 +136,12 @@ def TrackWand():
                         cv2.line(mask, (a,b),(c,d),(0,255,0), 2)
                         cv2.circle(frame,(a,b),5,color,-1)
                         cv2.putText(frame, str(i), (a,b), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255))
-        except IndexError:
-            print("Index error")
+        except IndexError as e:
+            print("Index error: ", e)
             End()
             break
+        except KeyboardInterrupt:
+            exit()
         except:
             e = sys.exc_info()[0]
             print("TrackWand Error: %s" % e )
@@ -185,15 +170,10 @@ def Spell(spell):
     cv2.putText(mask, spell, (5, 25),cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,0,0))
     if (spell=="Colovaria"):
         print("GPIO trinket")
-        pi.write(trinket_pin,0)
-        time.sleep(1)
-        pi.write(trinket_pin,1)
     elif (spell=="Lumos"):
         print("GPIO ON")
-        pi.write(switch_pin,1)
     elif (spell=="Nox"):
         print("GPIO OFF")
-        pi.write(switch_pin,0)
     print("CAST: %s" %spell)
 
 #IsGesture is called to determine whether a gesture is found within tracked points
@@ -219,5 +199,21 @@ def IsGesture(a,b,c,d,i):
     print(astr)
 
 def End():
-	cam.close()
-	cv2.destroyAllWindows()
+    global cam
+    cam.close()
+    cv2.destroyAllWindows()
+
+# Set DISPLAY so that the camera has a screen to output to
+os.environ['DISPLAY'] = ":0.0"
+
+# Parameters for image processing
+lk_params = dict( winSize  = (15,15),
+                maxLevel = 2,
+                criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+dilation_params = (5, 5)
+movment_threshold = 80
+
+global cam
+
+Scan()
+
