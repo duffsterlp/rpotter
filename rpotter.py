@@ -29,15 +29,15 @@ import threading
 import math
 import time
 import os
+import copy
 
 # Scan starts camera input and runs FindNewPoints
 def Scan():
-    global cam
+    global camera_handle
     cv2.namedWindow("Raspberry Potter")
-    stream = io.BytesIO()
-    cam = picamera.PiCamera()
-    cam.resolution = (640, 480)
-    cam.framerate = 24
+    camera_handle = picamera.PiCamera()
+    camera_handle.resolution = (640, 480)
+    camera_handle.framerate = 24
     try:
         while True:
             FindNewPoints()
@@ -47,21 +47,11 @@ def Scan():
 
 #FindWand is called to find all potential wands in a scene.  These are then tracked as points for movement.  The scene is reset every 3 seconds.
 def FindNewPoints():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame,cam
-    stream = io.BytesIO()
+    global old_frame,old_gray,p0,mask,color,ig,img,frame,camera_handle
     try:
-        try:
-            old_frame = cam.capture(stream, format='jpeg')
-        except:
-            print("resetting points")
-        data = np.fromstring(stream.getvalue(), dtype=np.uint8)
-        old_frame = cv2.imdecode(data, 1)
+        old_frame = GetImage()
         cv2.flip(old_frame,1,old_frame)
         old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
-        #cv2.equalizeHist(old_gray,old_gray)
-        #old_gray = cv2.GaussianBlur(old_gray,(9,9),1.5)
-        #dilate_kernel = np.ones(dilation_params, np.uint8)
-        #old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
 
         #TODO: trained image recognition
         p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,100,param1=100,param2=30,minRadius=4,maxRadius=15)
@@ -83,21 +73,11 @@ def FindNewPoints():
         exit()
 
 def TrackWand():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame,cam
+    global old_frame,old_gray,p0,mask,color,ig,img,frame,camera_handle
     color = (0,0,255)
-    stream = io.BytesIO()
-    try:
-        old_frame = cam.capture(stream, format='jpeg')
-    except:
-        print("resetting points")
-    data = np.fromstring(stream.getvalue(), dtype=np.uint8)
-    old_frame = cv2.imdecode(data, 1)
+    old_frame = GetImage()
     cv2.flip(old_frame,1,old_frame)
     old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
-    #cv2.equalizeHist(old_gray,old_gray)
-    #old_gray = cv2.GaussianBlur(old_gray,(9,9),1.5)
-    #dilate_kernel = np.ones(dilation_params, np.uint8)
-    #old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
     # Take first frame and find circles in it
     p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,100,param1=100,param2=30,minRadius=4,maxRadius=15)
     try:
@@ -109,15 +89,9 @@ def TrackWand():
     mask = np.zeros_like(old_frame)
 
     while True:
-        frame = cam.capture(stream, format='jpeg')
-        data2 = np.fromstring(stream.getvalue(), dtype=np.uint8)
-        frame = cv2.imdecode(data2, 1)
+        frame = GetImage()
         cv2.flip(frame,1,frame)
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        #equalizeHist(frame_gray,frame_gray)
-        #frame_gray = GaussianBlur(frame_gray,(9,9),1.5)
-        #dilate_kernel = np.ones(dilation_params, np.uint8)
-        #frame_gray = cv2.dilate(frame_gray, dilate_kernel, iterations=1)
         try:
             # calculate optical flow
             p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
@@ -132,7 +106,7 @@ def TrackWand():
                 if (i<15):
                     IsGesture(a,b,c,d,i)
                     dist = math.hypot(a - c, b - d)
-                    if (dist<movment_threshold):
+                    if (dist<movement_threshold):
                         cv2.line(mask, (a,b),(c,d),(0,255,0), 2)
                         cv2.circle(frame,(a,b),5,color,-1)
                         cv2.putText(frame, str(i), (a,b), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255))
@@ -154,9 +128,7 @@ def TrackWand():
         cv2.imshow("Raspberry Potter", frame)
 
         # get next frame
-        frame = cam.capture(stream, format='jpeg')
-        data3 = np.fromstring(stream.getvalue(), dtype=np.uint8)
-        frame = cv2.imdecode(data3, 1)
+        frame = GetImage()
 
         # Now update the previous frame and previous points
         old_gray = frame_gray.copy()
@@ -178,7 +150,7 @@ def Spell(spell):
 
 #IsGesture is called to determine whether a gesture is found within tracked points
 def IsGesture(a,b,c,d,i):
-    print("point: %s" % i)
+    print("point: a=%s b=%s c=%s d=%s i=%s " % (a,b,c,d,i))
     #record basic movements - TODO: trained gestures
     if ((a<(c-5))&(abs(b-d)<1)):
         ig[i].append("left")
@@ -198,9 +170,37 @@ def IsGesture(a,b,c,d,i):
         Spell("Colovaria")
     print(astr)
 
+def GetImage():
+    """
+    Take a picture and return a numpy array containing the picture
+    :return: A numpy array containing the picture data
+    """
+    global camera_handle
+
+    # Initialize the image byte stream variable
+    image_byte_stream = io.BytesIO()
+
+    # Takes a picture from the camera in the JPEG format 
+    # and puts the data into the image_byte_stream variable
+    camera_handle.capture(image_byte_stream, format='jpeg')
+
+    # Put the stream of data into an array with each element
+    # having a format of uint8
+    image_array = np.fromstring(image_byte_stream.getvalue(), dtype=np.uint8)
+
+    # Reads the data into a data structure that cv2 can process.
+    # cv can natively import JPEG files according to its documentation.
+    # The resulting data structure is a 2D array sized by the resolution
+    # of the image. So, for example, with a resolution of 640x480,
+    # each element is 640 elements in length and there are 480 overall elements.
+    # The image is decoded in color (as opposed to grayscale)
+    cv2_image_array = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+    return copy.deepcopy(cv2_image_array)
+
 def End():
-    global cam
-    cam.close()
+    global camera_handle
+    camera_handle.close()
     cv2.destroyAllWindows()
 
 # Set DISPLAY so that the camera has a screen to output to
@@ -211,9 +211,9 @@ lk_params = dict( winSize  = (15,15),
                 maxLevel = 2,
                 criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 dilation_params = (5, 5)
-movment_threshold = 80
+movement_threshold = 80
 
-global cam
+global camera_handle
 
 Scan()
 
