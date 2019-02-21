@@ -39,37 +39,14 @@ def Scan():
     camera_handle.framerate = 24
     try:
         while True:
-            FindNewPoints(camera_handle)
+            TrackWand(camera_handle)
     except KeyboardInterrupt:
-        End(camera_handle)
-        exit()
-
-# FindNewPoints is called to find all potential wands in a scene.
-# These are then tracked as points for movement.
-def FindNewPoints(camera_handle):
-    global old_frame,old_gray,p0,mask,color,ig,img,frame
-    try:
-        old_frame = GetImage(camera_handle)
-        cv2.flip(old_frame,1,old_frame)
-        old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
-        p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,100,param1=100,param2=30,minRadius=4,maxRadius=15)
-        p0.shape = (p0.shape[1], 1, p0.shape[2])
-        p0 = p0[:,:,0:2]
-        mask = np.zeros_like(old_frame)
-        ig = [[0] for x in range(20)]
-        print("finding...")
-        TrackWand(camera_handle)
-    except KeyboardInterrupt:
-        End(camera_handle)
-        exit()
-    except:
-        e = sys.exc_info()[1]
-        print("FindWand Error: %s" % e )
         End(camera_handle)
         exit()
 
 def TrackWand(camera_handle):
     global old_frame,old_gray,p0,mask,color,ig,img,frame
+    ig = [[0] for x in range(20)]
     color = (0,0,255)
     old_frame = GetImage(camera_handle)
     cv2.flip(old_frame,1,old_frame)
