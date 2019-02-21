@@ -33,49 +33,45 @@ import copy
 
 # Scan starts camera input and runs FindNewPoints
 def Scan():
-    global camera_handle
     cv2.namedWindow("Raspberry Potter")
     camera_handle = picamera.PiCamera()
     camera_handle.resolution = (640, 480)
     camera_handle.framerate = 24
     try:
         while True:
-            FindNewPoints()
+            FindNewPoints(camera_handle)
     except KeyboardInterrupt:
-        End()
+        End(camera_handle)
         exit()
 
-#FindWand is called to find all potential wands in a scene.  These are then tracked as points for movement.  The scene is reset every 3 seconds.
-def FindNewPoints():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame,camera_handle
+# FindNewPoints is called to find all potential wands in a scene.
+# These are then tracked as points for movement.
+def FindNewPoints(camera_handle):
+    global old_frame,old_gray,p0,mask,color,ig,img,frame
     try:
-        old_frame = GetImage()
+        old_frame = GetImage(camera_handle)
         cv2.flip(old_frame,1,old_frame)
         old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
-
-        #TODO: trained image recognition
         p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,100,param1=100,param2=30,minRadius=4,maxRadius=15)
         p0.shape = (p0.shape[1], 1, p0.shape[2])
         p0 = p0[:,:,0:2]
         mask = np.zeros_like(old_frame)
         ig = [[0] for x in range(20)]
         print("finding...")
-        TrackWand()
-        #This resets the scene every three seconds
-        threading.Timer(3, FindNewPoints).start()
+        TrackWand(camera_handle)
     except KeyboardInterrupt:
-        End()
+        End(camera_handle)
         exit()
     except:
         e = sys.exc_info()[1]
         print("FindWand Error: %s" % e )
-        End()
+        End(camera_handle)
         exit()
 
-def TrackWand():
-    global old_frame,old_gray,p0,mask,color,ig,img,frame,camera_handle
+def TrackWand(camera_handle):
+    global old_frame,old_gray,p0,mask,color,ig,img,frame
     color = (0,0,255)
-    old_frame = GetImage()
+    old_frame = GetImage(camera_handle)
     cv2.flip(old_frame,1,old_frame)
     old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
     # Take first frame and find circles in it
@@ -89,7 +85,7 @@ def TrackWand():
     mask = np.zeros_like(old_frame)
 
     while True:
-        frame = GetImage()
+        frame = GetImage(camera_handle)
         cv2.flip(frame,1,frame)
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         try:
@@ -112,14 +108,14 @@ def TrackWand():
                         cv2.putText(frame, str(i), (a,b), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255))
         except IndexError as e:
             print("Index error: ", e)
-            End()
+            End(camera_handle)
             break
         except KeyboardInterrupt:
             exit()
         except:
             e = sys.exc_info()[0]
             print("TrackWand Error: %s" % e )
-            End()
+            End(camera_handle)
             break
         img = cv2.add(frame,mask)
 
@@ -128,7 +124,7 @@ def TrackWand():
         cv2.imshow("Raspberry Potter", frame)
 
         # get next frame
-        frame = GetImage()
+        frame = GetImage(camera_handle)
 
         # Now update the previous frame and previous points
         old_gray = frame_gray.copy()
@@ -170,13 +166,12 @@ def IsGesture(a,b,c,d,i):
         Spell("Colovaria")
     print(astr)
 
-def GetImage():
+def GetImage(camera_handle):
     """
     Take a picture and return a numpy array containing the picture
+    :param camera_handle: The picamera object to use when getting the image
     :return: A numpy array containing the picture data
     """
-    global camera_handle
-
     # Initialize the image byte stream variable
     image_byte_stream = io.BytesIO()
 
@@ -198,8 +193,7 @@ def GetImage():
 
     return copy.deepcopy(cv2_image_array)
 
-def End():
-    global camera_handle
+def End(camera_handle):
     camera_handle.close()
     cv2.destroyAllWindows()
 
@@ -213,7 +207,4 @@ lk_params = dict( winSize  = (15,15),
 dilation_params = (5, 5)
 movement_threshold = 80
 
-global camera_handle
-
 Scan()
-
