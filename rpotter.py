@@ -45,7 +45,7 @@ def Scan():
         exit()
 
 def TrackWand(camera_handle):
-    global old_frame,old_gray,p0,mask,color,ig,img,frame
+    global mask,ig
     ig = [[0] for x in range(20)]
     color = (0,0,255)
     old_frame = GetImage(camera_handle)
@@ -141,7 +141,6 @@ def IsGesture(a,b,c,d,i):
         Spell("Nox")
     elif "leftdown" in astr:
         Spell("Colovaria")
-    print(astr)
 
 def GetImage(camera_handle):
     """
@@ -181,7 +180,6 @@ os.environ['DISPLAY'] = ":0.0"
 lk_params = dict( winSize  = (15,15),
                 maxLevel = 2,
                 criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-dilation_params = (5, 5)
 movement_threshold = 80
 
 Scan()
