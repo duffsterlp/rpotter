@@ -31,7 +31,7 @@ import time
 import os
 import copy
 
-# Scan starts camera input and runs FindNewPoints
+# Scan starts camera input and runs TrackWand
 def Scan():
     cv2.namedWindow("Raspberry Potter")
     camera_handle = picamera.PiCamera()
@@ -47,7 +47,6 @@ def Scan():
 def TrackWand(camera_handle):
     global mask,ig
     ig = [[0] for x in range(20)]
-    color = (0,0,255)
     old_frame = GetImage(camera_handle)
     cv2.flip(old_frame,1,old_frame)
     old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
@@ -181,5 +180,6 @@ lk_params = dict( winSize  = (15,15),
                 maxLevel = 2,
                 criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 movement_threshold = 80
+color = (0,0,255)
 
 Scan()
